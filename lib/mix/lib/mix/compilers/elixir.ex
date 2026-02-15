@@ -81,10 +81,10 @@ defmodule Mix.Compilers.Elixir do
 
     local_deps = Enum.reject(Mix.Dep.cached(), & &1.scm.fetchable?())
 
-    # If mix.exs has changed, recompile anything that calls Mix.Project.
+    # If mix.exs has changed, recompile anything that calls Mix.Project or Mix.Feature.
     stale =
       if project_mtime > old_project_mtime,
-        do: [Mix.Project | stale],
+        do: [Mix.Project, Mix.Feature | stale],
         else: stale
 
     # If the lock has changed or a local dependency was added or removed,

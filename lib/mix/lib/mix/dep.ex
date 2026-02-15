@@ -38,6 +38,10 @@ defmodule Mix.Dep do
     * `system_env` - an enumerable of key-value tuples of binaries to be set as environment variables
       when loading or compiling the dependency
 
+    * `features` - a list of feature atoms requested by consumers
+
+    * `default_features` - whether to include the dependency's default features
+
   A dependency is in two specific states: loaded and unloaded.
 
   When a dependency is unloaded, it means Mix only parsed its specification
@@ -64,7 +68,9 @@ defmodule Mix.Dep do
             extra: [],
             manager: nil,
             from: nil,
-            system_env: []
+            system_env: [],
+            features: [],
+            default_features: true
 
   @type t :: %__MODULE__{
           scm: Mix.SCM.t(),
@@ -76,7 +82,9 @@ defmodule Mix.Dep do
           manager: :rebar3 | :mix | :make | nil,
           from: String.t(),
           extra: term,
-          system_env: keyword
+          system_env: keyword,
+          features: [atom],
+          default_features: boolean
         }
 
   @doc """
@@ -247,7 +255,7 @@ defmodule Mix.Dep do
   """
   def in_dependency(dep, post_config \\ [], fun)
 
-  def in_dependency(%Mix.Dep{app: app, opts: opts, scm: scm}, config, fun) do
+  def in_dependency(%Mix.Dep{app: app, opts: opts, scm: scm} = dep, config, fun) do
     # Set the deps_app_path to be the one stored in the dependency.
     # This is important because the name of application in the
     # mix.exs file can be different than the actual name and we
@@ -275,10 +283,21 @@ defmodule Mix.Dep do
 
     try do
       Mix.env(env)
-      Mix.Project.in_project(app, opts[:dest], config, fun)
+
+      Mix.Project.in_project(app, opts[:dest], config, fn module ->
+        resolve_and_inject_features(dep)
+        fun.(module)
+      end)
     after
       Mix.env(old_env)
     end
+  end
+
+  defp resolve_and_inject_features(%Mix.Dep{features: [], default_features: true}), do: :ok
+
+  defp resolve_and_inject_features(%Mix.Dep{} = dep) do
+    resolved = Mix.Dep.FeatureResolver.resolve(dep)
+    Mix.ProjectStack.merge_config(features: resolved)
   end
 
   @doc """

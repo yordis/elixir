@@ -321,6 +321,7 @@ defmodule Mix.Dep.Converger do
               dep
               |> with_matching_only_and_targets(other, in_upper?)
               |> merge_manager(other, in_upper?)
+              |> merge_features(other)
 
             {:replace, dep, pre ++ pos}
 
@@ -329,6 +330,7 @@ defmodule Mix.Dep.Converger do
               other
               |> with_matching_only_and_targets(dep, in_upper?)
               |> merge_manager(dep, in_upper?)
+              |> merge_features(dep)
 
             {:match, pre ++ [other | pos]}
         end
@@ -420,6 +422,14 @@ defmodule Mix.Dep.Converger do
     Enum.split_with(children, fn %Mix.Dep{app: app, opts: opts} ->
       opts[:optional] && app not in upper_breadths && !umbrella?
     end)
+  end
+
+  defp merge_features(%Mix.Dep{} = other, %Mix.Dep{} = dep) do
+    %{
+      other
+      | features: Enum.uniq(other.features ++ dep.features),
+        default_features: other.default_features or dep.default_features
+    }
   end
 
   defp merge_manager(%{manager: other_manager} = other, %{manager: manager}, in_upper?) do

@@ -177,6 +177,47 @@ defmodule Mix.Tasks.Compile.ElixirTest do
     end)
   end
 
+  test "recompiles files using Mix.Feature if mix.exs changes" do
+    in_fixture("no_mixfile", fn ->
+      Mix.ProjectStack.post_config(features: [default: [:json]])
+      Mix.Project.push(MixTest.Case.Sample, __ENV__.file)
+
+      File.write!("lib/a.ex", """
+      defmodule A do
+        require Mix.Feature
+        def enabled?, do: Mix.Feature.enabled?(:json)
+      end
+      """)
+
+      assert Mix.Tasks.Compile.Elixir.run(["--verbose"]) == {:ok, []}
+      assert_received {:mix_shell, :info, ["Compiled lib/a.ex"]}
+      assert_received {:mix_shell, :info, ["Compiled lib/b.ex"]}
+
+      ensure_touched(__ENV__.file, "_build/dev/lib/sample/.mix/compile.elixir")
+      assert Mix.Tasks.Compile.Elixir.run(["--verbose"]) == {:ok, []}
+      assert_received {:mix_shell, :info, ["Compiled lib/a.ex"]}
+      refute_received {:mix_shell, :info, ["Compiled lib/b.ex"]}
+
+      # Now remove the dependency
+      File.write!("lib/a.ex", """
+      defmodule A do
+      end
+      """)
+
+      ensure_touched(__ENV__.file, "_build/dev/lib/sample/.mix/compile.elixir")
+      File.touch!("_build/dev/lib/sample/.mix/compile.elixir", @old_time)
+      assert Mix.Tasks.Compile.Elixir.run(["--verbose"]) == {:ok, []}
+      assert_received {:mix_shell, :info, ["Compiled lib/a.ex"]}
+      refute_received {:mix_shell, :info, ["Compiled lib/b.ex"]}
+      assert mtime("_build/dev/lib/sample/.mix/compile.elixir") > @old_time
+
+      ensure_touched(__ENV__.file, "_build/dev/lib/sample/.mix/compile.elixir")
+      assert Mix.Tasks.Compile.Elixir.run(["--verbose"]) == {:ok, []}
+      refute_received {:mix_shell, :info, ["Compiled lib/a.ex"]}
+      refute_received {:mix_shell, :info, ["Compiled lib/b.ex"]}
+    end)
+  end
+
   test "recompiles files when config changes" do
     in_fixture("no_mixfile", fn ->
       Mix.Project.push(MixTest.Case.Sample)
