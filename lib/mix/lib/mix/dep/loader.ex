@@ -187,6 +187,13 @@ defmodule Mix.Dep.Loader do
       |> Keyword.put(:build, build)
 
     {system_env, opts} = Keyword.pop(opts, :system_env, [])
+    {features, opts} = Keyword.pop(opts, :features, [])
+    {default_features, opts} = Keyword.pop(opts, :default_features, true)
+
+    validate_features_opt!(app, features)
+    validate_default_features_opt!(app, default_features)
+    validate_only_features_opt!(app, opts[:only_features])
+
     {scm, opts} = get_scm(app, opts)
 
     {scm, opts} =
@@ -215,8 +222,39 @@ defmodule Mix.Dep.Loader do
       requirement: req,
       status: scm_status(scm, opts),
       opts: Keyword.put_new(opts, :env, :prod),
-      system_env: Enum.to_list(system_env)
+      system_env: Enum.to_list(system_env),
+      features: features,
+      default_features: default_features
     }
+  end
+
+  defp validate_features_opt!(app, features) do
+    unless is_list(features) and Enum.all?(features, &is_atom/1) do
+      Mix.raise(
+        "Expected :features in dependency #{inspect(app)} to be a list of atoms, " <>
+          "got: #{inspect(features)}"
+      )
+    end
+  end
+
+  defp validate_default_features_opt!(app, default_features) do
+    unless is_boolean(default_features) do
+      Mix.raise(
+        "Expected :default_features in dependency #{inspect(app)} to be a boolean, " <>
+          "got: #{inspect(default_features)}"
+      )
+    end
+  end
+
+  defp validate_only_features_opt!(_app, nil), do: :ok
+
+  defp validate_only_features_opt!(app, only_features) do
+    unless is_list(only_features) and only_features != [] and Enum.all?(only_features, &is_atom/1) do
+      Mix.raise(
+        "Expected :only_features in dependency #{inspect(app)} to be a non-empty list of atoms, " <>
+          "got: #{inspect(only_features)}"
+      )
+    end
   end
 
   defp get_scm(app, opts) do
@@ -375,6 +413,21 @@ defmodule Mix.Dep.Loader do
     |> Enum.map(&to_dep(&1, from, _manager = nil, locked?))
     |> split_by_env_and_target({opts[:env], nil})
     |> elem(0)
+    |> filter_by_features(config[:features])
+  end
+
+  defp filter_by_features(deps, nil), do: deps
+  defp filter_by_features(deps, []), do: deps
+
+  defp filter_by_features(deps, features_config) do
+    enabled = Keyword.get(features_config, :default, [])
+
+    Enum.filter(deps, fn %Mix.Dep{opts: opts} ->
+      case opts[:only_features] do
+        nil -> true
+        required -> Enum.any?(required, &(&1 in enabled))
+      end
+    end)
   end
 
   defp rebar_children(config, manager, dest, locked?) do
