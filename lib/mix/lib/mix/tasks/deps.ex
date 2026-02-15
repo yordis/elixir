@@ -119,6 +119,26 @@ defmodule Mix.Tasks.Deps do
     * `:system_env` - an enumerable of key-value tuples of binaries to be set
       as environment variables when loading or compiling the dependency
 
+    * `:features` - a list of feature atoms to enable on the dependency.
+      Features are additive across the dependency tree — if multiple
+      consumers request different features, the union of all requested
+      features is enabled. For example:
+
+          {:jason, ">= 1.0.0", features: [:json, :metrics]}
+
+    * `:default_features` - when set to `false`, disables the dependency's
+      default features. Only the features explicitly listed in `:features`
+      will be enabled. Defaults to `true`. For example:
+
+          {:jason, ">= 1.0.0", features: [:json], default_features: false}
+
+    * `:only_features` - makes the dependency conditional on one or more
+      features of the *current* project being enabled. The dependency is
+      included if *any* of the listed features is enabled (OR semantics).
+      For example:
+
+          {:jason, ">= 1.0.0", only_features: [:json]}
+
   When a project is used as a dependency, it runs by default in the `:prod`
   environment. Therefore, if your project has dependencies that are only
   useful in development or testing, you want to specify those dependencies with
@@ -173,9 +193,12 @@ defmodule Mix.Tasks.Deps do
 
   The `mix deps` task lists dependencies in the following format:
 
-      APP VERSION (SCM) (MANAGER)
+      APP VERSION (SCM) [(features: FEATURES)] (MANAGER)
       [locked at REF]
       STATUS
+
+  The features section is only shown when features are explicitly
+  requested or default features are disabled.
 
   For dependencies satisfied by Hex, `REF` is the package checksum.
 
