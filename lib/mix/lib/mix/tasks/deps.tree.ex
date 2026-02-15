@@ -149,7 +149,7 @@ defmodule Mix.Tasks.Deps.Tree do
     end
   end
 
-  defp format_dot(%{app: app, requirement: requirement, opts: opts}) do
+  defp format_dot(%{app: app, requirement: requirement, opts: opts} = dep) do
     override =
       if opts[:override] do
         " *override*"
@@ -157,11 +157,12 @@ defmodule Mix.Tasks.Deps.Tree do
         ""
       end
 
+    features = format_features(dep)
     requirement = requirement && requirement(requirement)
-    {app, "#{requirement}#{override}"}
+    {app, "#{requirement}#{features}#{override}"}
   end
 
-  defp format_tree(%{app: app, scm: scm, requirement: requirement, opts: opts}) do
+  defp format_tree(%{app: app, scm: scm, requirement: requirement, opts: opts} = dep) do
     override =
       if opts[:override] do
         IO.ANSI.format([:bright, " *override*"])
@@ -169,8 +170,22 @@ defmodule Mix.Tasks.Deps.Tree do
         ""
       end
 
+    features = format_features(dep)
     requirement = requirement && "#{requirement(requirement)} "
-    {app, "#{requirement}(#{scm.format(opts)})#{override}"}
+    {app, "#{requirement}(#{scm.format(opts)})#{features}#{override}"}
+  end
+
+  defp format_features(%{features: [], default_features: true}), do: ""
+
+  defp format_features(%{features: features, default_features: default_features}) do
+    parts =
+      (if features != [], do: [Enum.join(features, ", ")], else: []) ++
+        if(not default_features, do: ["no default features"], else: [])
+
+    case parts do
+      [] -> ""
+      _ -> " (features: #{Enum.join(parts, "; ")})"
+    end
   end
 
   defp requirement(%Regex{} = regex), do: "#{inspect(regex)}"

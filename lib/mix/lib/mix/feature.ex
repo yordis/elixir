@@ -145,6 +145,8 @@ defmodule Mix.Feature do
   defp parse_features([]), do: %{}
 
   defp parse_features(config) when is_list(config) do
+    validate_features_config!(config)
+
     default = Keyword.get(config, :default, [])
     optional = Keyword.get(config, :optional, [])
 
@@ -152,5 +154,46 @@ defmodule Mix.Feature do
     optional_map = Map.from_keys(optional, false)
 
     Map.merge(optional_map, default_map)
+  end
+
+  defp parse_features(config) do
+    Mix.raise(
+      "Expected :features in project configuration to be a keyword list, " <>
+        "got: #{inspect(config)}"
+    )
+  end
+
+  defp validate_features_config!(config) do
+    unknown_keys = Keyword.keys(config) -- [:default, :optional]
+
+    if unknown_keys != [] do
+      Mix.raise(
+        "Unknown keys #{inspect(unknown_keys)} in :features configuration. " <>
+          "Supported keys are: :default, :optional"
+      )
+    end
+
+    validate_feature_list!(:default, Keyword.get(config, :default, []))
+    validate_feature_list!(:optional, Keyword.get(config, :optional, []))
+
+    overlap =
+      Keyword.get(config, :default, []) --
+        (Keyword.get(config, :default, []) -- Keyword.get(config, :optional, []))
+
+    if overlap != [] do
+      IO.warn(
+        "Features #{inspect(overlap)} appear in both :default and :optional. " <>
+          "They will be enabled since :default takes precedence"
+      )
+    end
+  end
+
+  defp validate_feature_list!(key, list) do
+    unless is_list(list) and Enum.all?(list, &is_atom/1) do
+      Mix.raise(
+        "Expected #{inspect(key)} in :features to be a list of atoms, " <>
+          "got: #{inspect(list)}"
+      )
+    end
   end
 end

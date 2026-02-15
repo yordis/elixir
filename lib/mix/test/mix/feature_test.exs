@@ -84,7 +84,10 @@ defmodule Mix.FeatureTest do
       end
 
       Mix.Project.push(SampleOverlap)
-      assert Mix.Feature.all() == %{json: true}
+
+      assert ExUnit.CaptureIO.capture_io(:stderr, fn ->
+               assert Mix.Feature.all() == %{json: true}
+             end) =~ "Features [:json] appear in both :default and :optional"
     end
   end
 
@@ -167,6 +170,98 @@ defmodule Mix.FeatureTest do
         Mix.Feature.enabled?("json")
         """)
       end
+    end
+  end
+
+  describe "validation" do
+    test "raises on unknown keys" do
+      defmodule SampleUnknownKeys do
+        def project do
+          [
+            app: :sample,
+            version: "0.1.0",
+            features: [default: [:json], defaults: [:logging]]
+          ]
+        end
+      end
+
+      Mix.Project.push(SampleUnknownKeys)
+
+      assert_raise Mix.Error, ~r/Unknown keys \[:defaults\]/, fn ->
+        Mix.Feature.all()
+      end
+    end
+
+    test "raises on non-atom defaults" do
+      defmodule SampleNonAtomDefaults do
+        def project do
+          [
+            app: :sample,
+            version: "0.1.0",
+            features: [default: ["json"]]
+          ]
+        end
+      end
+
+      Mix.Project.push(SampleNonAtomDefaults)
+
+      assert_raise Mix.Error, ~r/Expected :default in :features to be a list of atoms/, fn ->
+        Mix.Feature.all()
+      end
+    end
+
+    test "raises on non-atom optionals" do
+      defmodule SampleNonAtomOptionals do
+        def project do
+          [
+            app: :sample,
+            version: "0.1.0",
+            features: [optional: [123]]
+          ]
+        end
+      end
+
+      Mix.Project.push(SampleNonAtomOptionals)
+
+      assert_raise Mix.Error, ~r/Expected :optional in :features to be a list of atoms/, fn ->
+        Mix.Feature.all()
+      end
+    end
+
+    test "raises on non-keyword-list config" do
+      defmodule SampleNotKeyword do
+        def project do
+          [
+            app: :sample,
+            version: "0.1.0",
+            features: "invalid"
+          ]
+        end
+      end
+
+      Mix.Project.push(SampleNotKeyword)
+
+      assert_raise Mix.Error, ~r/Expected :features in project configuration to be a keyword list/, fn ->
+        Mix.Feature.all()
+      end
+    end
+
+    test "warns on overlap between default and optional" do
+      defmodule SampleOverlapWarning do
+        def project do
+          [
+            app: :sample,
+            version: "0.1.0",
+            features: [default: [:json, :logging], optional: [:json]]
+          ]
+        end
+      end
+
+      Mix.Project.push(SampleOverlapWarning)
+
+      assert ExUnit.CaptureIO.capture_io(:stderr, fn ->
+               assert Mix.Feature.all() == %{json: true, logging: true}
+             end) =~ "Features [:json] appear in both :default and :optional"
     end
   end
 end

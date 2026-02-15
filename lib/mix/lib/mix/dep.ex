@@ -533,14 +533,27 @@ defmodule Mix.Dep do
   @doc """
   Formats a dependency for printing.
   """
-  def format_dep(%Mix.Dep{scm: scm, app: app, status: status, opts: opts}) do
+  def format_dep(%Mix.Dep{scm: scm, app: app, status: status, opts: opts} = dep) do
     version =
       case status do
         {:ok, vsn} when vsn != nil -> "#{vsn} "
         _ -> ""
       end
 
-    "#{app} #{version}(#{scm.format(opts)})"
+    "#{app} #{version}(#{scm.format(opts)})#{format_features(dep)}"
+  end
+
+  defp format_features(%Mix.Dep{features: [], default_features: true}), do: ""
+
+  defp format_features(%Mix.Dep{features: features, default_features: default_features}) do
+    parts =
+      (if features != [], do: [Enum.join(features, ", ")], else: []) ++
+        if(not default_features, do: ["no default features"], else: [])
+
+    case parts do
+      [] -> ""
+      _ -> " (features: #{Enum.join(parts, "; ")})"
+    end
   end
 
   @doc """
