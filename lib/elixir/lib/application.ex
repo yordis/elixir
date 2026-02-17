@@ -645,6 +645,46 @@ defmodule Application do
     end
   end
 
+  @doc """
+  Checks if a feature is enabled at compile time.
+
+  This macro expands to `compile_env(app, [:features, feature], false)`,
+  leveraging the existing compile environment tracking for automatic
+  recompilation when feature configuration changes.
+
+  It must be called in a module body, not inside functions.
+
+  ## Examples
+
+      if Application.feature_enabled?(:my_app, :json) do
+        defmodule MyApp.JsonParser do
+          # only compiled when :json feature is enabled
+        end
+      end
+
+  """
+  @doc since: "1.20.0"
+  defmacro feature_enabled?(app, feature) when is_atom(feature) do
+    if __CALLER__.function do
+      raise "Application.feature_enabled?/2 cannot be called inside functions, only in the module body"
+    end
+
+    quote do
+      Application.compile_env(unquote(app), [:features, unquote(feature)], false)
+    end
+  end
+
+  @doc """
+  Checks if a feature is enabled at compile time from a macro.
+
+  This is the function version of `feature_enabled?/2` for use inside
+  other macros. It expects a `Macro.Env` as first argument.
+  """
+  @doc since: "1.20.0"
+  def feature_enabled?(%Macro.Env{} = env, app, feature) when is_atom(feature) do
+    compile_env(env, app, [:features, feature], false)
+  end
+
   defp fetch_compile_env(app, key, env) when is_atom(key) do
     fetch_compile_env(app, key, [], env)
   end

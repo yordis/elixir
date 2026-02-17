@@ -81,10 +81,10 @@ defmodule Mix.Compilers.Elixir do
 
     local_deps = Enum.reject(Mix.Dep.cached(), & &1.scm.fetchable?())
 
-    # If mix.exs has changed, recompile anything that calls Mix.Project or Mix.Feature.
+    # If mix.exs has changed, recompile anything that calls Mix.Project.
     stale =
       if project_mtime > old_project_mtime,
-        do: [Mix.Project, Mix.Feature | stale],
+        do: [Mix.Project | stale],
         else: stale
 
     # If the lock has changed or a local dependency was added or removed,
@@ -97,6 +97,16 @@ defmodule Mix.Compilers.Elixir do
     # track modules, only the compile env. So far this is only true for Elixir's
     # dbg callback.
     compile_env_apps = deps_config_compile_env_apps(old_deps_config)
+
+    # If mix.exs changed, feature flags stored via Application.put_env may
+    # have changed. Add the project's app so compile_env values are rechecked.
+    compile_env_apps =
+      if project_mtime > old_project_mtime do
+        app = Mix.Project.config()[:app]
+        if app in compile_env_apps, do: compile_env_apps, else: [app | compile_env_apps]
+      else
+        compile_env_apps
+      end
 
     {force?, stale, new_deps_config} =
       cond do

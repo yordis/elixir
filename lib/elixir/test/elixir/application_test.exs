@@ -143,6 +143,48 @@ defmodule ApplicationTest do
       {result, _binding} = Code.eval_quoted(code, [], tracers: [__MODULE__])
       result
     end
+
+    test "feature_enabled?/2 returns false when feature not set" do
+      assert feature_enabled?(:elixir, :nonexistent) == false
+      assert_received {:compile_env, :elixir, [:features, :nonexistent], :error}
+    end
+
+    test "feature_enabled?/2 returns true when feature is enabled" do
+      Application.put_env(:elixir, :features, %{json: true, metrics: false})
+      assert feature_enabled?(:elixir, :json) == true
+      assert_received {:compile_env, :elixir, [:features, :json], {:ok, true}}
+      assert feature_enabled?(:elixir, :metrics) == false
+      assert_received {:compile_env, :elixir, [:features, :metrics], {:ok, false}}
+    after
+      Application.delete_env(:elixir, :features)
+    end
+
+    test "feature_enabled?/2 raises when called inside a function" do
+      assert_raise RuntimeError,
+                   ~r/cannot be called inside functions/,
+                   fn ->
+                     Code.eval_string("""
+                     defmodule FeatureInsideFunction do
+                       require Application
+                       def check, do: Application.feature_enabled?(:my_app, :json)
+                     end
+                     """)
+                   end
+    after
+      :code.purge(FeatureInsideFunction)
+      :code.delete(FeatureInsideFunction)
+    end
+
+    defp feature_enabled?(app, feature) do
+      code =
+        quote do
+          require Application
+          Application.feature_enabled?(unquote(app), unquote(feature))
+        end
+
+      {result, _binding} = Code.eval_quoted(code, [], tracers: [__MODULE__])
+      result
+    end
   end
 
   test "loaded and started applications" do

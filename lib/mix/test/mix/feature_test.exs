@@ -45,9 +45,50 @@ defmodule Mix.FeatureTest do
     end
   end
 
-  describe "all/0" do
-    test "returns map of features with default and optional" do
+  describe "seed_features/0" do
+    test "seeds Application env with parsed features" do
       Mix.Project.push(SampleWithFeatures)
+      Mix.Feature.seed_features()
+
+      assert Application.get_env(:sample, :features) == %{
+               json: true,
+               logging: true,
+               debug_tools: false,
+               metrics: false
+             }
+    after
+      Application.delete_env(:sample, :features)
+    end
+
+    test "seeds empty map when no features configured" do
+      Mix.Project.push(SampleWithoutFeatures)
+      Mix.Feature.seed_features()
+      assert Application.get_env(:sample, :features) == %{}
+    after
+      Application.delete_env(:sample, :features)
+    end
+
+    test "seeds with only default features" do
+      Mix.Project.push(SampleWithDefaultOnly)
+      Mix.Feature.seed_features()
+      assert Application.get_env(:sample, :features) == %{json: true}
+    after
+      Application.delete_env(:sample, :features)
+    end
+
+    test "seeds with only optional features" do
+      Mix.Project.push(SampleWithOptionalOnly)
+      Mix.Feature.seed_features()
+      assert Application.get_env(:sample, :features) == %{debug_tools: false}
+    after
+      Application.delete_env(:sample, :features)
+    end
+  end
+
+  describe "all/0" do
+    test "returns map of features from Application env" do
+      Mix.Project.push(SampleWithFeatures)
+      Mix.Feature.seed_features()
 
       assert Mix.Feature.all() == %{
                json: true,
@@ -55,21 +96,13 @@ defmodule Mix.FeatureTest do
                debug_tools: false,
                metrics: false
              }
+    after
+      Application.delete_env(:sample, :features)
     end
 
-    test "returns empty map when no features configured" do
+    test "returns empty map when no features seeded" do
       Mix.Project.push(SampleWithoutFeatures)
       assert Mix.Feature.all() == %{}
-    end
-
-    test "returns map with only default features" do
-      Mix.Project.push(SampleWithDefaultOnly)
-      assert Mix.Feature.all() == %{json: true}
-    end
-
-    test "returns map with only optional features" do
-      Mix.Project.push(SampleWithOptionalOnly)
-      assert Mix.Feature.all() == %{debug_tools: false}
     end
 
     test "default takes precedence over optional for same feature" do
@@ -86,16 +119,22 @@ defmodule Mix.FeatureTest do
       Mix.Project.push(SampleOverlap)
 
       assert ExUnit.CaptureIO.capture_io(:stderr, fn ->
+               Mix.Feature.seed_features()
                assert Mix.Feature.all() == %{json: true}
              end) =~ "Features [:json] appear in both :default and :optional"
+    after
+      Application.delete_env(:sample, :features)
     end
   end
 
   describe "enabled_features/0" do
     test "returns only enabled feature atoms" do
       Mix.Project.push(SampleWithFeatures)
+      Mix.Feature.seed_features()
       enabled = Mix.Feature.enabled_features()
       assert Enum.sort(enabled) == [:json, :logging]
+    after
+      Application.delete_env(:sample, :features)
     end
 
     test "returns empty list when no features configured" do
@@ -107,69 +146,16 @@ defmodule Mix.FeatureTest do
   describe "declared_features/0" do
     test "returns all declared feature atoms" do
       Mix.Project.push(SampleWithFeatures)
+      Mix.Feature.seed_features()
       declared = Mix.Feature.declared_features()
       assert Enum.sort(declared) == [:debug_tools, :json, :logging, :metrics]
+    after
+      Application.delete_env(:sample, :features)
     end
 
     test "returns empty list when no features configured" do
       Mix.Project.push(SampleWithoutFeatures)
       assert Mix.Feature.declared_features() == []
-    end
-  end
-
-  describe "enabled?/1 macro" do
-    test "resolves to true for enabled features" do
-      Mix.Project.push(SampleWithFeatures)
-
-      result =
-        Code.eval_string("""
-        require Mix.Feature
-        Mix.Feature.enabled?(:json)
-        """)
-        |> elem(0)
-
-      assert result == true
-    end
-
-    test "resolves to false for disabled features" do
-      Mix.Project.push(SampleWithFeatures)
-
-      result =
-        Code.eval_string("""
-        require Mix.Feature
-        Mix.Feature.enabled?(:debug_tools)
-        """)
-        |> elem(0)
-
-      assert result == false
-    end
-
-    test "resolves to false for undeclared features with warning" do
-      Mix.Project.push(SampleWithFeatures)
-
-      assert ExUnit.CaptureIO.capture_io(:stderr, fn ->
-               result =
-                 Code.eval_string("""
-                 require Mix.Feature
-                 Mix.Feature.enabled?(:nonexistent)
-                 """)
-                 |> elem(0)
-
-               send(self(), {:result, result})
-             end) =~ "feature :nonexistent is not declared"
-
-      assert_received {:result, false}
-    end
-
-    test "raises for non-atom argument" do
-      Mix.Project.push(SampleWithFeatures)
-
-      assert_raise ArgumentError, ~r/expects a literal atom/, fn ->
-        Code.eval_string("""
-        require Mix.Feature
-        Mix.Feature.enabled?("json")
-        """)
-      end
     end
   end
 
@@ -188,7 +174,7 @@ defmodule Mix.FeatureTest do
       Mix.Project.push(SampleUnknownKeys)
 
       assert_raise Mix.Error, ~r/Unknown keys \[:defaults\]/, fn ->
-        Mix.Feature.all()
+        Mix.Feature.seed_features()
       end
     end
 
@@ -206,7 +192,7 @@ defmodule Mix.FeatureTest do
       Mix.Project.push(SampleNonAtomDefaults)
 
       assert_raise Mix.Error, ~r/Expected :default in :features to be a list of atoms/, fn ->
-        Mix.Feature.all()
+        Mix.Feature.seed_features()
       end
     end
 
@@ -224,7 +210,7 @@ defmodule Mix.FeatureTest do
       Mix.Project.push(SampleNonAtomOptionals)
 
       assert_raise Mix.Error, ~r/Expected :optional in :features to be a list of atoms/, fn ->
-        Mix.Feature.all()
+        Mix.Feature.seed_features()
       end
     end
 
@@ -242,7 +228,7 @@ defmodule Mix.FeatureTest do
       Mix.Project.push(SampleNotKeyword)
 
       assert_raise Mix.Error, ~r/Expected :features in project configuration to be a keyword list/, fn ->
-        Mix.Feature.all()
+        Mix.Feature.seed_features()
       end
     end
 
@@ -260,8 +246,11 @@ defmodule Mix.FeatureTest do
       Mix.Project.push(SampleOverlapWarning)
 
       assert ExUnit.CaptureIO.capture_io(:stderr, fn ->
+               Mix.Feature.seed_features()
                assert Mix.Feature.all() == %{json: true, logging: true}
              end) =~ "Features [:json] appear in both :default and :optional"
+    after
+      Application.delete_env(:sample, :features)
     end
   end
 end

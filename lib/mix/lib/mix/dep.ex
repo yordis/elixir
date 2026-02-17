@@ -297,7 +297,15 @@ defmodule Mix.Dep do
 
   defp resolve_and_inject_features(%Mix.Dep{} = dep) do
     resolved = Mix.Dep.FeatureResolver.resolve(dep)
-    Mix.ProjectStack.merge_config(features: resolved)
+    app = dep.app
+    features_map = resolved_to_map(resolved)
+    Application.put_env(app, :features, features_map)
+  end
+
+  defp resolved_to_map(resolved) do
+    default = Keyword.get(resolved, :default, [])
+    optional = Keyword.get(resolved, :optional, [])
+    Map.merge(Map.from_keys(optional, false), Map.from_keys(default, true))
   end
 
   @doc """

@@ -36,9 +36,10 @@ defmodule Mix.Feature do
 
   ## Usage
 
-  Use the `enabled?/1` macro in module bodies to conditionally compile code:
+  Use `Application.feature_enabled?/2` in module bodies to conditionally
+  compile code:
 
-      if Mix.Feature.enabled?(:json) do
+      if Application.feature_enabled?(:my_app, :json) do
         defmodule MyApp.JsonParser do
           # only compiled when :json feature is enabled
         end
@@ -51,8 +52,9 @@ defmodule Mix.Feature do
 
   ## Recompilation
 
-  Modules that use `Mix.Feature.enabled?/1` are automatically recompiled
-  when `mix.exs` changes, using the same mechanism as `Mix.Project`.
+  Modules that use `Application.feature_enabled?/2` are automatically
+  recompiled when feature configuration changes, using the same mechanism
+  as `Application.compile_env/3`.
   """
 
   @doc """
@@ -70,8 +72,8 @@ defmodule Mix.Feature do
   """
   @spec all() :: %{atom() => boolean()}
   def all do
-    features_config = Mix.Project.config()[:features]
-    parse_features(features_config)
+    app = Mix.Project.config()[:app]
+    Application.get_env(app, :features, %{})
   end
 
   @doc """
@@ -107,44 +109,27 @@ defmodule Mix.Feature do
   end
 
   @doc """
-  Checks if a feature is enabled at compile time.
+  Seeds the Application environment with features from the project config.
 
-  This macro resolves to a literal `true` or `false` at compile time,
-  allowing the compiler to eliminate dead code branches. It must be
-  called in a module body (not inside function definitions).
-
-  A warning is emitted if the feature is not declared in the project
-  configuration, which helps catch typos.
-
-  ## Examples
-
-      if Mix.Feature.enabled?(:json) do
-        def parse(data), do: Jason.decode!(data)
-      end
-
+  Parses the `:features` configuration from `mix.exs` and writes the
+  resulting feature map to `Application.put_env(app, :features, map)`.
+  This must be called before compilation so that
+  `Application.feature_enabled?/2` can read the values.
   """
-  defmacro enabled?(feature) when is_atom(feature) do
-    features = parse_features(Mix.Project.config()[:features])
-
-    unless Map.has_key?(features, feature) do
-      IO.warn(
-        "feature #{inspect(feature)} is not declared in your mix.exs :features configuration",
-        __CALLER__
-      )
-    end
-
-    Map.get(features, feature, false)
+  @spec seed_features() :: :ok
+  def seed_features do
+    config = Mix.Project.config()
+    app = config[:app]
+    features_config = config[:features]
+    features_map = parse_features(features_config)
+    Application.put_env(app, :features, features_map)
   end
 
-  defmacro enabled?(feature) do
-    raise ArgumentError,
-          "Mix.Feature.enabled?/1 expects a literal atom, got: #{Macro.to_string(feature)}"
-  end
+  @doc false
+  def parse_features(nil), do: %{}
+  def parse_features([]), do: %{}
 
-  defp parse_features(nil), do: %{}
-  defp parse_features([]), do: %{}
-
-  defp parse_features(config) when is_list(config) do
+  def parse_features(config) when is_list(config) do
     validate_features_config!(config)
 
     default = Keyword.get(config, :default, [])
@@ -156,7 +141,7 @@ defmodule Mix.Feature do
     Map.merge(optional_map, default_map)
   end
 
-  defp parse_features(config) do
+  def parse_features(config) do
     Mix.raise(
       "Expected :features in project configuration to be a keyword list, " <>
         "got: #{inspect(config)}"

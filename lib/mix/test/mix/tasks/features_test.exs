@@ -27,6 +27,7 @@ defmodule Mix.Tasks.FeaturesTest do
 
   test "lists features with enabled/disabled status" do
     Mix.Project.push(FeaturesApp)
+    Mix.Feature.seed_features()
     Mix.Tasks.Features.run([])
 
     assert_received {:mix_shell, :info, ["Features for :sample\n"]}
@@ -34,12 +35,17 @@ defmodule Mix.Tasks.FeaturesTest do
     assert_received {:mix_shell, :info, ["  * json (enabled)"]}
     assert_received {:mix_shell, :info, ["  * logging (enabled)"]}
     assert_received {:mix_shell, :info, ["  * metrics (disabled)"]}
+  after
+    Application.delete_env(:sample, :features)
   end
 
   test "shows no features message when none configured" do
     Mix.Project.push(NoFeaturesApp)
+    Mix.Feature.seed_features()
     Mix.Tasks.Features.run([])
 
     assert_received {:mix_shell, :info, ["No features configured for :sample"]}
+  after
+    Application.delete_env(:sample, :features)
   end
 end
