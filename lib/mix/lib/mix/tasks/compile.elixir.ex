@@ -133,8 +133,6 @@ defmodule Mix.Tasks.Compile.Elixir do
       Mix.raise(":elixirc_paths should be a list of string paths, got: #{inspect(srcs)}")
     end
 
-    Mix.Feature.seed_features()
-
     manifest = manifest()
     base = xref_exclude_opts(project[:elixirc_options] || [], project)
     cache_key = {base, srcs, "--no-optional-deps" in args}

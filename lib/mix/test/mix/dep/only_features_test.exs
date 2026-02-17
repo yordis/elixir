@@ -12,7 +12,6 @@ defmodule Mix.Dep.OnlyFeaturesTest do
         [
           app: :test_app,
           version: "0.1.0",
-          features: [default: [:json], optional: [:metrics]],
           deps: [
             {:json_dep, path: "deps/json_dep", only_features: [:json]}
           ]
@@ -21,9 +20,12 @@ defmodule Mix.Dep.OnlyFeaturesTest do
     end
 
     test "dep included when required feature is enabled" do
+      Application.put_env(:test_app, :features, %{json: true, metrics: false})
       Mix.Project.push(WithEnabledFeature)
       deps = Mix.Dep.Loader.children(false)
       assert Enum.any?(deps, &(&1.app == :json_dep))
+    after
+      Application.delete_env(:test_app, :features)
     end
 
     defmodule WithDisabledFeature do
@@ -31,7 +33,6 @@ defmodule Mix.Dep.OnlyFeaturesTest do
         [
           app: :test_app,
           version: "0.1.0",
-          features: [default: [:json], optional: [:metrics]],
           deps: [
             {:metrics_dep, path: "deps/metrics_dep", only_features: [:metrics]}
           ]
@@ -40,9 +41,12 @@ defmodule Mix.Dep.OnlyFeaturesTest do
     end
 
     test "dep excluded when required feature is disabled" do
+      Application.put_env(:test_app, :features, %{json: true, metrics: false})
       Mix.Project.push(WithDisabledFeature)
       deps = Mix.Dep.Loader.children(false)
       refute Enum.any?(deps, &(&1.app == :metrics_dep))
+    after
+      Application.delete_env(:test_app, :features)
     end
 
     defmodule WithOrSemantics do
@@ -50,7 +54,6 @@ defmodule Mix.Dep.OnlyFeaturesTest do
         [
           app: :test_app,
           version: "0.1.0",
-          features: [default: [:json], optional: [:metrics]],
           deps: [
             {:multi_dep, path: "deps/multi_dep", only_features: [:metrics, :json]}
           ]
@@ -59,9 +62,12 @@ defmodule Mix.Dep.OnlyFeaturesTest do
     end
 
     test "OR semantics — ANY matching feature includes the dep" do
+      Application.put_env(:test_app, :features, %{json: true, metrics: false})
       Mix.Project.push(WithOrSemantics)
       deps = Mix.Dep.Loader.children(false)
       assert Enum.any?(deps, &(&1.app == :multi_dep))
+    after
+      Application.delete_env(:test_app, :features)
     end
 
     defmodule WithoutOnlyFeatures do
@@ -69,7 +75,6 @@ defmodule Mix.Dep.OnlyFeaturesTest do
         [
           app: :test_app,
           version: "0.1.0",
-          features: [default: [:json], optional: [:metrics]],
           deps: [
             {:regular_dep, path: "deps/regular_dep"}
           ]
@@ -78,9 +83,12 @@ defmodule Mix.Dep.OnlyFeaturesTest do
     end
 
     test "dep without only_features is always included" do
+      Application.put_env(:test_app, :features, %{json: true, metrics: false})
       Mix.Project.push(WithoutOnlyFeatures)
       deps = Mix.Dep.Loader.children(false)
       assert Enum.any?(deps, &(&1.app == :regular_dep))
+    after
+      Application.delete_env(:test_app, :features)
     end
 
     defmodule WithNoFeaturesConfig do
@@ -104,12 +112,11 @@ defmodule Mix.Dep.OnlyFeaturesTest do
       assert :regular_dep in apps
     end
 
-    defmodule WithEmptyDefaults do
+    defmodule WithEmptyFeatures do
       def project do
         [
           app: :test_app,
           version: "0.1.0",
-          features: [default: [], optional: [:json]],
           deps: [
             {:json_dep, path: "deps/json_dep", only_features: [:json]}
           ]
@@ -117,10 +124,13 @@ defmodule Mix.Dep.OnlyFeaturesTest do
       end
     end
 
-    test "empty default features — feature-gated dep excluded" do
-      Mix.Project.push(WithEmptyDefaults)
+    test "empty features map — feature-gated dep excluded" do
+      Application.put_env(:test_app, :features, %{json: false})
+      Mix.Project.push(WithEmptyFeatures)
       deps = Mix.Dep.Loader.children(false)
       refute Enum.any?(deps, &(&1.app == :json_dep))
+    after
+      Application.delete_env(:test_app, :features)
     end
 
     defmodule WithAllFeaturesDisabled do
@@ -128,7 +138,6 @@ defmodule Mix.Dep.OnlyFeaturesTest do
         [
           app: :test_app,
           version: "0.1.0",
-          features: [default: [:json], optional: [:metrics]],
           deps: [
             {:metrics_only, path: "deps/metrics_only", only_features: [:metrics]},
             {:absent_feature, path: "deps/absent_feature", only_features: [:nonexistent]}
@@ -138,11 +147,14 @@ defmodule Mix.Dep.OnlyFeaturesTest do
     end
 
     test "dep excluded when none of its required features are enabled" do
+      Application.put_env(:test_app, :features, %{json: true, metrics: false})
       Mix.Project.push(WithAllFeaturesDisabled)
       deps = Mix.Dep.Loader.children(false)
       apps = Enum.map(deps, & &1.app)
       refute :metrics_only in apps
       refute :absent_feature in apps
+    after
+      Application.delete_env(:test_app, :features)
     end
 
     defmodule WithMixedDeps do
@@ -150,7 +162,6 @@ defmodule Mix.Dep.OnlyFeaturesTest do
         [
           app: :test_app,
           version: "0.1.0",
-          features: [default: [:json, :logging], optional: [:metrics, :debug]],
           deps: [
             {:always_dep, path: "deps/always_dep"},
             {:json_dep, path: "deps/json_dep", only_features: [:json]},
@@ -162,6 +173,7 @@ defmodule Mix.Dep.OnlyFeaturesTest do
     end
 
     test "mixed deps — only matching features pass" do
+      Application.put_env(:test_app, :features, %{json: true, logging: true, metrics: false, debug: false})
       Mix.Project.push(WithMixedDeps)
       deps = Mix.Dep.Loader.children(false)
       apps = Enum.map(deps, & &1.app)
@@ -169,6 +181,8 @@ defmodule Mix.Dep.OnlyFeaturesTest do
       assert :json_dep in apps
       refute :metrics_dep in apps
       assert :multi_dep in apps
+    after
+      Application.delete_env(:test_app, :features)
     end
   end
 

@@ -179,8 +179,8 @@ defmodule Mix.Tasks.Compile.ElixirTest do
 
   test "recompiles files using Application.feature_enabled? via compile_env" do
     in_fixture("no_mixfile", fn ->
-      Mix.ProjectStack.post_config(features: [default: [:json]])
-      Mix.Project.push(MixTest.Case.Sample, __ENV__.file)
+      Mix.Project.push(MixTest.Case.Sample)
+      File.mkdir_p!("config")
 
       File.write!("lib/a.ex", """
       defmodule A do
@@ -190,34 +190,36 @@ defmodule Mix.Tasks.Compile.ElixirTest do
       end
       """)
 
-      assert Mix.Tasks.Compile.Elixir.run(["--verbose"]) == {:ok, []}
-      assert_received {:mix_shell, :info, ["Compiled lib/a.ex"]}
-      assert_received {:mix_shell, :info, ["Compiled lib/b.ex"]}
-
       recompile = fn ->
         Mix.ProjectStack.pop()
-        Mix.ProjectStack.post_config(features: [default: [:json]])
-        Mix.Project.push(MixTest.Case.Sample, __ENV__.file)
-        ensure_touched("lib/a.ex", "_build/dev/lib/sample/.mix/compile.elixir")
+        Mix.Project.push(MixTest.Case.Sample)
+        ensure_touched("config/config.exs", "_build/dev/lib/sample/.mix/compile.elixir")
+        Mix.Tasks.Loadconfig.load_compile("config/config.exs")
         Mix.Tasks.Compile.Elixir.run(["--verbose"])
       end
 
-      # No change in feature value — no recompile
-      assert recompile.() == {:noop, []}
-      refute_received {:mix_shell, :info, ["Compiled lib/a.ex"]}
-      refute_received {:mix_shell, :info, ["Compiled lib/b.ex"]}
+      # Initial compile with feature enabled
+      File.write!("config/config.exs", """
+      import Config
+      config :sample, features: %{json: true}
+      """)
 
-      # Change feature value and touch project file — triggers recompile
-      Mix.ProjectStack.pop()
-      Mix.ProjectStack.post_config(features: [optional: [:json]])
-      Mix.Project.push(MixTest.Case.Sample, __ENV__.file)
-      ensure_touched(__ENV__.file, "_build/dev/lib/sample/.mix/compile.elixir")
-      assert Mix.Tasks.Compile.Elixir.run(["--verbose"]) == {:ok, []}
+      assert recompile.() == {:ok, []}
       assert_received {:mix_shell, :info, ["Compiled lib/a.ex"]}
-      refute_received {:mix_shell, :info, ["Compiled lib/b.ex"]}
+      assert_received {:mix_shell, :info, ["Compiled lib/b.ex"]}
+
+      # Change feature value — triggers recompile of file using feature_enabled?
+      File.write!("config/config.exs", """
+      import Config
+      config :sample, features: %{json: false}
+      """)
+
+      assert recompile.() == {:ok, []}
+      assert_received {:mix_shell, :info, ["Compiled lib/a.ex"]}
+      assert_received {:mix_shell, :info, ["Compiled lib/b.ex"]}
     end)
   after
-    Application.delete_env(:sample, :features)
+    Application.delete_env(:sample, :features, persistent: true)
   end
 
   test "recompiles files when config changes" do

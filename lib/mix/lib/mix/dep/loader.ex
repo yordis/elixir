@@ -413,21 +413,24 @@ defmodule Mix.Dep.Loader do
     |> Enum.map(&to_dep(&1, from, _manager = nil, locked?))
     |> split_by_env_and_target({opts[:env], nil})
     |> elem(0)
-    |> filter_by_features(config[:features])
+    |> filter_by_features(config[:app])
   end
 
-  defp filter_by_features(deps, nil), do: deps
-  defp filter_by_features(deps, []), do: deps
+  defp filter_by_features(deps, app) do
+    features = Application.get_env(app, :features, %{})
 
-  defp filter_by_features(deps, features_config) do
-    enabled = Keyword.get(features_config, :default, [])
+    if features == %{} do
+      deps
+    else
+      enabled = for {k, v} <- features, v, do: k
 
-    Enum.filter(deps, fn %Mix.Dep{opts: opts} ->
-      case opts[:only_features] do
-        nil -> true
-        required -> Enum.any?(required, &(&1 in enabled))
-      end
-    end)
+      Enum.filter(deps, fn %Mix.Dep{opts: opts} ->
+        case opts[:only_features] do
+          nil -> true
+          required -> Enum.any?(required, &(&1 in enabled))
+        end
+      end)
+    end
   end
 
   defp rebar_children(config, manager, dest, locked?) do

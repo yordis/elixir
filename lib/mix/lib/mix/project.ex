@@ -1083,7 +1083,6 @@ defmodule Mix.Project do
       erlc_paths: ["src"],
       erlc_include_path: "include",
       erlc_options: [],
-      features: [],
       lockfile: "mix.lock",
       start_permanent: false
     ]

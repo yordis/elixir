@@ -98,16 +98,6 @@ defmodule Mix.Compilers.Elixir do
     # dbg callback.
     compile_env_apps = deps_config_compile_env_apps(old_deps_config)
 
-    # If mix.exs changed, feature flags stored via Application.put_env may
-    # have changed. Add the project's app so compile_env values are rechecked.
-    compile_env_apps =
-      if project_mtime > old_project_mtime do
-        app = Mix.Project.config()[:app]
-        if app in compile_env_apps, do: compile_env_apps, else: [app | compile_env_apps]
-      else
-        compile_env_apps
-      end
-
     {force?, stale, new_deps_config} =
       cond do
         !!opts[:force] or is_nil(old_deps_config) or old_cache_key != new_cache_key or
