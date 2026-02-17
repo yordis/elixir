@@ -159,6 +159,23 @@ defmodule ApplicationTest do
       Application.delete_env(:elixir, :features)
     end
 
+    test "feature_enabled?/2 raises for undeclared feature" do
+      Application.put_env(:elixir, :features, %{json: true, metrics: false})
+
+      assert_raise ArgumentError,
+                   ~r/feature :unknown is not declared in :elixir's :features configuration/,
+                   fn ->
+                     feature_enabled?(:elixir, :unknown)
+                   end
+    after
+      Application.delete_env(:elixir, :features)
+    end
+
+    test "feature_enabled?/2 does not raise when no features configured" do
+      Application.delete_env(:elixir, :features)
+      assert feature_enabled?(:elixir, :anything) == false
+    end
+
     test "feature_enabled?/2 raises when called inside a function" do
       assert_raise RuntimeError,
                    ~r/cannot be called inside functions/,

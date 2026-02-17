@@ -654,6 +654,10 @@ defmodule Application do
 
   It must be called in a module body, not inside functions.
 
+  Raises `ArgumentError` at compile time if the application has features
+  configured but the given feature is not among them. This prevents
+  typos and use of unregistered feature flags.
+
   ## Examples
 
       if Application.feature_enabled?(:my_app, :json) do
@@ -669,6 +673,14 @@ defmodule Application do
       raise "Application.feature_enabled?/2 cannot be called inside functions, only in the module body"
     end
 
+    features = Application.get_env(app, :features, %{})
+
+    if features != %{} and not is_map_key(features, feature) do
+      raise ArgumentError,
+            "feature #{inspect(feature)} is not declared in #{inspect(app)}'s :features configuration. " <>
+              "Declared features: #{inspect(Map.keys(features))}"
+    end
+
     quote do
       Application.compile_env(unquote(app), [:features, unquote(feature)], false)
     end
@@ -679,9 +691,20 @@ defmodule Application do
 
   This is the function version of `feature_enabled?/2` for use inside
   other macros. It expects a `Macro.Env` as first argument.
+
+  Raises `ArgumentError` if the application has features configured but
+  the given feature is not among them.
   """
   @doc since: "1.20.0"
   def feature_enabled?(%Macro.Env{} = env, app, feature) when is_atom(feature) do
+    features = Application.get_env(app, :features, %{})
+
+    if features != %{} and not is_map_key(features, feature) do
+      raise ArgumentError,
+            "feature #{inspect(feature)} is not declared in #{inspect(app)}'s :features configuration. " <>
+              "Declared features: #{inspect(Map.keys(features))}"
+    end
+
     compile_env(env, app, [:features, feature], false)
   end
 
