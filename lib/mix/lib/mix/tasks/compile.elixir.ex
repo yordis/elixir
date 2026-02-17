@@ -133,6 +133,8 @@ defmodule Mix.Tasks.Compile.Elixir do
       Mix.raise(":elixirc_paths should be a list of string paths, got: #{inspect(srcs)}")
     end
 
+    seed_features(project[:app])
+
     manifest = manifest()
     base = xref_exclude_opts(project[:elixirc_options] || [], project)
     cache_key = {base, srcs, "--no-optional-deps" in args}
@@ -227,6 +229,18 @@ defmodule Mix.Tasks.Compile.Elixir do
       {:ok, "time"} -> Keyword.put(opts, :profile, :time)
       {:ok, _} -> Keyword.delete(opts, :profile)
       :error -> opts
+    end
+  end
+
+  defp seed_features(app) do
+    project = Mix.Project.get()
+
+    if project && function_exported?(project, :application, 0) do
+      features = project.application() |> Keyword.get(:env, []) |> Keyword.get(:features, nil)
+
+      if features do
+        Application.put_env(app, :features, features)
+      end
     end
   end
 end

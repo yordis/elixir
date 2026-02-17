@@ -12,18 +12,17 @@ defmodule Mix.Feature do
 
   ## Configuration
 
-  Features are configured via config files or `def application` in your
-  `mix.exs`:
-
-      # config/config.exs
-      import Config
-      config :my_app, features: %{json: true, metrics: false}
-
-  Or in `mix.exs`:
+  Features are configured in `def application` in your `mix.exs`:
 
       def application do
         [env: [features: %{json: true, metrics: false}]]
       end
+
+  They can also be set or overridden via config files:
+
+      # config/config.exs
+      import Config
+      config :my_app, features: %{json: true, metrics: false}
 
   ## Usage
 

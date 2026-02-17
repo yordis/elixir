@@ -177,7 +177,7 @@ defmodule Mix.Tasks.Compile.ElixirTest do
     end)
   end
 
-  test "recompiles files using Application.feature_enabled? via compile_env" do
+  test "recompiles files using Application.feature_enabled? when config changes" do
     in_fixture("no_mixfile", fn ->
       Mix.Project.push(MixTest.Case.Sample)
       File.mkdir_p!("config")
@@ -208,7 +208,7 @@ defmodule Mix.Tasks.Compile.ElixirTest do
       assert_received {:mix_shell, :info, ["Compiled lib/a.ex"]}
       assert_received {:mix_shell, :info, ["Compiled lib/b.ex"]}
 
-      # Change feature value — triggers recompile of file using feature_enabled?
+      # Change feature value — triggers recompile
       File.write!("config/config.exs", """
       import Config
       config :sample, features: %{json: false}
@@ -220,6 +220,35 @@ defmodule Mix.Tasks.Compile.ElixirTest do
     end)
   after
     Application.delete_env(:sample, :features, persistent: true)
+  end
+
+  test "seeds features from def application before compilation" do
+    in_fixture("no_mixfile", fn ->
+      Process.put({MixTest.Case.Sample, :application}, env: [features: %{json: true}])
+      Mix.Project.push(MixTest.Case.Sample, __ENV__.file)
+
+      File.write!("lib/a.ex", """
+      defmodule A do
+        require Application
+        @feature_json Application.feature_enabled?(:sample, :json)
+        def enabled?, do: @feature_json
+      end
+      """)
+
+      assert Mix.Tasks.Compile.Elixir.run(["--verbose"]) == {:ok, []}
+      assert_received {:mix_shell, :info, ["Compiled lib/a.ex"]}
+
+      # Change feature in def application and touch mix.exs — triggers recompile
+      Process.put({MixTest.Case.Sample, :application}, env: [features: %{json: false}])
+      Mix.ProjectStack.pop()
+      Mix.Project.push(MixTest.Case.Sample, __ENV__.file)
+      ensure_touched(__ENV__.file, "_build/dev/lib/sample/.mix/compile.elixir")
+      assert Mix.Tasks.Compile.Elixir.run(["--verbose"]) == {:ok, []}
+      assert_received {:mix_shell, :info, ["Compiled lib/a.ex"]}
+    end)
+  after
+    Process.delete({MixTest.Case.Sample, :application})
+    Application.delete_env(:sample, :features)
   end
 
   test "recompiles files when config changes" do
