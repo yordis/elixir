@@ -1061,7 +1061,8 @@ defmodule Mix.Compilers.Elixir do
     verification = Keyword.get(opts, :verification, true)
     extra_opts = Keyword.take(opts, [:profile, :purge_compiler_modules])
 
-    if not verification and not Mix.debug?() do
+    if not verification and not Keyword.get(opts, :from_mix_deps_compile, false) and
+         not Mix.debug?() do
       Mix.shell().error("--no-verification flag is only recommended with MIX_DEBUG=1")
     end
 

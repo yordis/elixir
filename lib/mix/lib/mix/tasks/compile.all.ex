@@ -75,6 +75,12 @@ defmodule Mix.Tasks.Compile.All do
         |> Mix.Task.Compiler.run(args)
       end
 
+    # Deps are compiled with --no-verification so their type checking is
+    # deferred until the parent app's modules are on the code path.
+    if "--from-mix-deps-compile" not in args and status != :error do
+      verify_deps(deps, config)
+    end
+
     if status == :error and "--return-errors" not in args do
       exit({:shutdown, 1})
     end
@@ -95,6 +101,29 @@ defmodule Mix.Tasks.Compile.All do
     end
 
     {status, diagnostics}
+  end
+
+  defp verify_deps(deps, config) do
+    build_path = Mix.Project.build_path(config)
+
+    dep_modules =
+      for dep <- deps,
+          dep.manager == :mix,
+          ebin = Path.join([build_path, "lib", Atom.to_string(dep.app), "ebin"]),
+          File.dir?(ebin),
+          beam <- Path.wildcard(Path.join(ebin, "Elixir.*.beam")),
+          module = beam |> Path.basename(".beam") |> String.to_atom(),
+          do: {module, beam}
+
+    if dep_modules != [] do
+      {:ok, checker} = Module.ParallelChecker.start_link()
+
+      try do
+        Module.ParallelChecker.verify(checker, dep_modules)
+      after
+        Module.ParallelChecker.stop(checker)
+      end
+    end
   end
 
   @doc """

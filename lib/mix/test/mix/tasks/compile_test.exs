@@ -550,4 +550,85 @@ defmodule Mix.Tasks.CompileTest do
         send_port_outputs_to(port, pid)
     end
   end
+
+  describe "compile_env referencing parent-defined module from dependency" do
+    # Reproduces: when a dep uses Application.compile_env to resolve a module
+    # name, and that module is defined by the parent app, the compiler warns
+    # "module X is not available or is yet to be defined" because deps compile
+    # and verify before the parent app's modules exist.
+    #
+    # Real-world scenario: a dep like trogon_commanded uses
+    #   @process_mod Application.compile_env(:dep, [__MODULE__, :process_module], Process)
+    # and the parent app configures it to TestSupport.Mock.Process (defined via Mox).
+    #
+    # Expected: no warning, since the module will exist after parent app compiles.
+    # Actual: warning emitted during dep verification.
+
+    defmodule CompileEnvDepApp do
+      def project do
+        [
+          app: :compile_env_dep_app,
+          version: "0.1.0",
+          deps: [{:configurable_dep, path: "deps/configurable_dep"}]
+        ]
+      end
+    end
+
+    test "warns about undefined module from compile_env in dependency" do
+      in_fixture("no_mixfile", fn ->
+        Mix.Project.pop()
+        Mix.Project.push(CompileEnvDepApp)
+
+        # Create the path dependency that uses compile_env to resolve a module
+        File.mkdir_p!("deps/configurable_dep/lib")
+
+        File.write!("deps/configurable_dep/mix.exs", """
+        defmodule ConfigurableDep.MixProject do
+          use Mix.Project
+
+          def project do
+            [app: :configurable_dep, version: "0.1.0"]
+          end
+        end
+        """)
+
+        File.write!("deps/configurable_dep/lib/configurable.ex", """
+        defmodule Configurable do
+          @mod Application.compile_env(:configurable_dep, :adapter, Process)
+          def run, do: @mod.sleep(1)
+        end
+        """)
+
+        # Configure the dep to point to a module defined in the parent app
+        File.mkdir_p!("config")
+
+        File.write!("config/config.exs", """
+        import Config
+        config :configurable_dep, :adapter, ParentAdapter
+        """)
+
+        # Define the module in the parent app
+        File.mkdir_p!("lib")
+
+        File.write!("lib/parent_adapter.ex", """
+        defmodule ParentAdapter do
+          def sleep(_ms), do: :ok
+        end
+        """)
+
+        Mix.Tasks.Loadconfig.run([])
+
+        output =
+          ExUnit.CaptureIO.capture_io(:stderr, fn ->
+            Mix.Task.run("compile")
+          end)
+
+        refute output =~ "is not available or is yet to be defined",
+               "dep should not warn about ParentAdapter since it exists in the parent app"
+      end)
+    after
+      purge([ConfigurableDep.MixProject, Configurable, ParentAdapter])
+      Application.delete_env(:configurable_dep, :adapter, persistent: true)
+    end
+  end
 end

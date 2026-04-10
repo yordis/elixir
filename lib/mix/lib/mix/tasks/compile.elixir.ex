@@ -117,6 +117,7 @@ defmodule Mix.Tasks.Compile.Elixir do
     profile: :string,
     all_warnings: :boolean,
     verification: :boolean,
+    from_mix_deps_compile: :boolean,
     tracer: :keep,
     check_cwd: :boolean
   ]
